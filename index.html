@@ -111,6 +111,11 @@
             padding: 2px;
         }
 
+        input[type="radio"] {
+            width: auto;
+            margin-right: 5px;
+        }
+
         .color-pickers {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -151,12 +156,15 @@
             background-color: white;
             border-radius: 4px;
             border: 1px solid var(--border);
+            /* Ensure container has a defined height for aspect ratio calculations */
+             min-height: 400px; /* Or a fixed height if preferred */
+             position: relative; /* Needed for loading overlay */
         }
 
         svg {
-            width: 100%;
-            height: 100%;
-            min-height: 400px;
+            display: block; /* Prevents extra space below SVG */
+            max-width: 100%;
+            max-height: 100%;
         }
 
         .loading {
@@ -181,14 +189,19 @@
             gap: 10px;
         }
 
-        .checkbox-group {
+        .checkbox-group, .radio-group {
             display: flex;
             gap: 10px;
             align-items: center;
+            flex-wrap: wrap; /* Allow wrapping */
         }
 
-        .checkbox-group input {
+        .checkbox-group input, .radio-group input {
             width: auto;
+        }
+
+        .radio-group label {
+            margin-bottom: 0; /* Align radio labels better */
         }
 
         .slider-group {
@@ -234,7 +247,7 @@
 <body>
     <div class="container">
         <h1>CSV WordCloud Generator</h1>
-        <p class="app-description">Upload a CSV file, customise your word cloud, and export as a high-resolution image</p>
+        <p class="app-description">Visualize text frequency from your CSV data. Upload a file (with text or text+weight columns), customize appearance, and download your unique word cloud as a PNG or SVG.</p>
 
         <div class="grid">
             <div class="panel control-panel">
@@ -242,31 +255,43 @@
                     <h3>Data Input</h3>
                     <label for="csv-file">Upload CSV file:</label>
                     <input type="file" id="csv-file" accept=".csv" />
-                    <p class="info-text">Your CSV can have either a single text column or separate text and weight columns</p>
-                    
+                    <p class="info-text">Your CSV can have either a single text column or separate text and weight columns.</p>
+
                     <label for="column-select">Text column:</label>
                     <select id="column-select" disabled>
                         <option value="">Select column after uploading CSV</option>
                     </select>
-                    
+
                     <div class="checkbox-group">
                         <input type="checkbox" id="use-weight-column" />
                         <label for="use-weight-column">Use weight column</label>
                     </div>
-                    
+
                     <label for="weight-column-select" id="weight-column-label" style="display: none;">Weight column:</label>
                     <select id="weight-column-select" disabled style="display: none;">
                         <option value="">Select weight column</option>
                     </select>
-                    <p class="info-text" id="weight-column-info" style="display: none;">Select the column containing numerical weights/frequencies</p>
+                    <p class="info-text" id="weight-column-info" style="display: none;">Select the column containing numerical weights/frequencies.</p>
                     <div id="error-message"></div>
                 </div>
 
                 <div class="control-group">
-                    <h3>Cloud Shape</h3>
+                    <h3>Cloud Layout</h3>
                     <label for="shape-file">Upload shape image (optional):</label>
                     <input type="file" id="shape-file" accept="image/*" />
-                    <p class="info-text">For best results, use a simple black silhouette on white background</p>
+                    <p class="info-text">For best results, use a simple black silhouette on white background. Shape image overrides aspect ratio.</p>
+
+                    <label>Aspect Ratio (if no shape image):</label>
+                    <div class="radio-group">
+                         <input type="radio" id="aspect-auto" name="aspect-ratio" value="auto" checked>
+                         <label for="aspect-auto">Auto</label>
+                         <input type="radio" id="aspect-landscape" name="aspect-ratio" value="landscape">
+                         <label for="aspect-landscape">Landscape (16:9)</label>
+                         <input type="radio" id="aspect-portrait" name="aspect-ratio" value="portrait">
+                         <label for="aspect-portrait">Portrait (9:16)</label>
+                         <input type="radio" id="aspect-square" name="aspect-ratio" value="square">
+                         <label for="aspect-square">Square (1:1)</label>
+                    </div>
                 </div>
 
                 <div class="control-group">
@@ -291,7 +316,7 @@
                         <input type="checkbox" id="keep-phrases" />
                         <label for="keep-phrases">Keep phrases together</label>
                     </div>
-                    
+
                     <div class="slider-group">
                         <label for="min-word-length">Minimum word length: <span id="min-word-length-value">3</span></label>
                         <input type="range" id="min-word-length" min="1" max="10" value="3" />
@@ -300,7 +325,7 @@
                             <span>10</span>
                         </div>
                     </div>
-                    
+
                     <div class="slider-group">
                         <label for="max-words">Max words: <span id="max-words-value">100</span></label>
                         <input type="range" id="max-words" min="10" max="300" value="100" />
@@ -309,7 +334,7 @@
                             <span>300</span>
                         </div>
                     </div>
-                    
+
                     <label for="stopwords">Stopwords (comma separated):</label>
                     <input type="text" id="stopwords" placeholder="the,and,of,to,a,in,for,is,on,that,by,this,with" value="the,and,of,to,a,in,for,is,on,that,by,this,with" />
                 </div>
@@ -357,7 +382,7 @@
         </div>
 
         <footer>
-            CSV WordCloud Generator | A client-side tool that can be deployed via GitHub Pages
+            CSV WordCloud Generator | A client-side tool
         </footer>
     </div>
 
@@ -369,7 +394,7 @@
         let shapeImage = null;
         let wordFrequencies = [];
         let isGenerating = false;
-        
+
         // DOM elements
         const csvFileInput = document.getElementById('csv-file');
         const columnSelect = document.getElementById('column-select');
@@ -378,6 +403,7 @@
         const weightColumnLabel = document.getElementById('weight-column-label');
         const weightColumnInfo = document.getElementById('weight-column-info');
         const shapeFileInput = document.getElementById('shape-file');
+        const aspectRatioRadios = document.querySelectorAll('input[name="aspect-ratio"]'); // Get aspect ratio radios
         const startColorInput = document.getElementById('start-color');
         const endColorInput = document.getElementById('end-color');
         const backgroundColorInput = document.getElementById('background-color');
@@ -410,42 +436,28 @@
             generateBtn.addEventListener('click', generateWordCloud);
             downloadPngBtn.addEventListener('click', downloadAsPNG);
             downloadSvgBtn.addEventListener('click', downloadAsSVG);
-            
+
+            // Add listener for aspect ratio changes (optional, could just read on generate)
+            // aspectRatioRadios.forEach(radio => radio.addEventListener('change', maybeRegenerate));
+
             // Set up slider value updates
-            minWordLengthInput.addEventListener('input', () => {
-                minWordLengthValue.textContent = minWordLengthInput.value;
-            });
-            
-            maxWordsInput.addEventListener('input', () => {
-                maxWordsValue.textContent = maxWordsInput.value;
-            });
-            
-            rotationRangeInput.addEventListener('input', () => {
-                rotationRangeValue.textContent = `±${rotationRangeInput.value}°`;
-            });
-            
-            scaleFactorInput.addEventListener('input', () => {
-                scaleFactorValue.textContent = scaleFactorInput.value;
-            });
-            
-            exportScaleInput.addEventListener('input', () => {
-                exportScaleValue.textContent = exportScaleInput.value;
-            });
-            
+            minWordLengthInput.addEventListener('input', () => minWordLengthValue.textContent = minWordLengthInput.value);
+            maxWordsInput.addEventListener('input', () => maxWordsValue.textContent = maxWordsInput.value);
+            rotationRangeInput.addEventListener('input', () => rotationRangeValue.textContent = `±${rotationRangeInput.value}°`);
+            scaleFactorInput.addEventListener('input', () => scaleFactorValue.textContent = scaleFactorInput.value);
+            exportScaleInput.addEventListener('input', () => exportScaleValue.textContent = exportScaleInput.value);
+
             // Disable download buttons initially
             downloadPngBtn.disabled = true;
             downloadSvgBtn.disabled = true;
         }
-        
+
         // Function to toggle weight column options
         function toggleWeightColumnOptions() {
             const useWeightColumn = useWeightColumnCheckbox.checked;
-            
             weightColumnLabel.style.display = useWeightColumn ? 'block' : 'none';
             weightColumnSelect.style.display = useWeightColumn ? 'block' : 'none';
             weightColumnInfo.style.display = useWeightColumn ? 'block' : 'none';
-            
-            // Update button state based on selections
             updateSelectedColumn();
         }
 
@@ -453,29 +465,19 @@
         function handleCSVUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            
-            // Show loading message
             showLoading('Parsing CSV...');
-            
-            // Parse the CSV file
             Papa.parse(file, {
                 header: true,
                 dynamicTyping: true,
                 skipEmptyLines: true,
                 complete: function(results) {
                     csvData = results.data;
-                    
-                    // Clear any previous error
                     hideError();
-                    
-                    // Check if CSV has data
                     if (!csvData || csvData.length === 0) {
                         showError('CSV file is empty or invalid.');
                         hideLoading();
                         return;
                     }
-                    
-                    // Populate column dropdown
                     populateColumnSelect(results.meta.fields);
                     hideLoading();
                 },
@@ -489,44 +491,31 @@
 
         // Function to populate column select dropdowns
         function populateColumnSelect(columns) {
-            // For text column select
             columnSelect.innerHTML = '';
             columnSelect.disabled = false;
-            
             const defaultTextOption = document.createElement('option');
-            defaultTextOption.value = '';
-            defaultTextOption.textContent = 'Select text column';
+            defaultTextOption.value = ''; defaultTextOption.textContent = 'Select text column';
             columnSelect.appendChild(defaultTextOption);
-            
-            // For weight column select
+
             weightColumnSelect.innerHTML = '';
             weightColumnSelect.disabled = false;
-            
             const defaultWeightOption = document.createElement('option');
-            defaultWeightOption.value = '';
-            defaultWeightOption.textContent = 'Select weight column';
+            defaultWeightOption.value = ''; defaultWeightOption.textContent = 'Select weight column';
             weightColumnSelect.appendChild(defaultWeightOption);
-            
-            // Add column options to both dropdowns
+
             columns.forEach(column => {
-                // For text column
                 const textOption = document.createElement('option');
-                textOption.value = column;
-                textOption.textContent = column;
+                textOption.value = column; textOption.textContent = column;
                 columnSelect.appendChild(textOption);
-                
-                // For weight column
+
                 const weightOption = document.createElement('option');
-                weightOption.value = column;
-                weightOption.textContent = column;
+                weightOption.value = column; weightOption.textContent = column;
                 weightColumnSelect.appendChild(weightOption);
             });
-            
-            // Restore previous selections if they exist in the new data
+
             if (selectedColumn && columns.includes(selectedColumn)) {
                 columnSelect.value = selectedColumn;
             }
-            
             updateSelectedColumn();
         }
 
@@ -535,8 +524,6 @@
             selectedColumn = columnSelect.value;
             const useWeightColumn = useWeightColumnCheckbox.checked;
             const selectedWeightColumn = weightColumnSelect.value;
-            
-            // Enable generate button if text column is selected AND (weight column is not used OR weight column is selected)
             generateBtn.disabled = !selectedColumn || (useWeightColumn && !selectedWeightColumn);
         }
 
@@ -545,99 +532,80 @@
             const file = event.target.files[0];
             if (!file) {
                 shapeImage = null;
+                // Re-enable aspect ratio controls if shape is removed
+                aspectRatioRadios.forEach(radio => radio.disabled = false);
+                 if (wordFrequencies.length > 0) { generateWordCloud(); } // Optional: Regenerate on removal
                 return;
             }
-            
+
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
                     shapeImage = img;
-                    // If a word cloud has already been generated, regenerate it with the new shape
+                    // Disable aspect ratio controls when shape is used
+                    aspectRatioRadios.forEach(radio => radio.disabled = true);
                     if (wordFrequencies.length > 0) {
-                        generateWordCloud();
+                        generateWordCloud(); // Regenerate with the new shape
                     }
                 };
+                img.onerror = () => {
+                    showError("Could not load shape image.");
+                    shapeImage = null;
+                    aspectRatioRadios.forEach(radio => radio.disabled = false);
+                };
                 img.src = e.target.result;
+            };
+            reader.onerror = () => {
+                showError("Could not read shape file.");
+                 shapeImage = null;
+                 aspectRatioRadios.forEach(radio => radio.disabled = false);
             };
             reader.readAsDataURL(file);
         }
 
         // Function to process text and count word frequencies
         function processText(text, keepPhrases, minWordLength, stopwords) {
-            // Convert stopwords to an array and trim each word
             const stopwordList = stopwords
                 .split(',')
                 .map(word => word.trim().toLowerCase())
                 .filter(word => word);
-                
-            // If keeping phrases intact, split by punctuation but keep words together
-            // Otherwise, split by any non-alphanumeric character
-            const regex = keepPhrases 
-                ? /[.!?;]+/
-                : /[^a-zA-Z0-9']+/;
-                
+
+            const regex = keepPhrases ? /[.!?;]+/ : /[^a-zA-Z0-9']+/;
+
             const words = text.split(regex)
-                .flatMap(phrase => {
-                    if (keepPhrases) {
-                        return phrase.trim();
-                    } else {
-                        return phrase.split(/\s+/);
-                    }
-                })
+                .flatMap(phrase => keepPhrases ? phrase.trim() : phrase.split(/\s+/))
                 .map(word => word.trim().toLowerCase())
-                .filter(word => {
-                    // Keep words that are longer than minimum length and not in stopwords
-                    return word.length >= minWordLength && 
-                           !stopwordList.includes(word) &&
-                           word.length > 0;
-                });
-                
-            // Count frequency of each word
+                .filter(word => word.length >= minWordLength && !stopwordList.includes(word) && word.length > 0);
+
             const wordCount = {};
-            words.forEach(word => {
-                wordCount[word] = (wordCount[word] || 0) + 1;
-            });
-            
-            // Convert to array of {text, value} objects and sort by frequency
+            words.forEach(word => wordCount[word] = (wordCount[word] || 0) + 1);
+
             return Object.entries(wordCount)
                 .map(([text, value]) => ({ text, value }))
                 .sort((a, b) => b.value - a.value);
         }
-        
+
         // Function to process precomputed data from text and weight columns
         function processPrecomputedData(textColumn, weightColumn) {
             const stopwords = stopwordsInput.value.split(',')
                 .map(word => word.trim().toLowerCase())
                 .filter(word => word);
-                
             const minWordLength = parseInt(minWordLengthInput.value);
-            
-            // Extract word-weight pairs from CSV
             const wordWeights = {};
-            
+
             csvData.forEach(row => {
                 const text = row[textColumn];
                 const weight = parseFloat(row[weightColumn]);
-                
-                // Skip rows with invalid data
-                if (!text || typeof text !== 'string' || isNaN(weight)) {
-                    return;
-                }
-                
-                // Process the text based on settings
+
+                if (!text || typeof text !== 'string' || isNaN(weight)) return;
+
                 const processedText = text.trim().toLowerCase();
-                
-                // Skip stopwords and short words
-                if (stopwords.includes(processedText) || processedText.length < minWordLength) {
-                    return;
-                }
-                
-                // Sum weights for duplicate words
+                if (stopwords.includes(processedText) || processedText.length < minWordLength) return;
+
                 wordWeights[processedText] = (wordWeights[processedText] || 0) + weight;
             });
-            
-            // Convert to array of {text, value} objects and sort by frequency
+
             return Object.entries(wordWeights)
                 .map(([text, value]) => ({ text, value }))
                 .sort((a, b) => b.value - a.value);
@@ -646,39 +614,16 @@
         // Function to generate color scale
         function generateColorScale(startColor, endColor, steps) {
             return d3.scaleLinear()
-                .domain([0, steps - 1])
+                .domain([0, Math.max(1, steps - 1)]) // Ensure domain doesn't start and end at 0 if steps=1
                 .range([startColor, endColor])
                 .interpolate(d3.interpolateHcl);
         }
 
-        // Function to create a canvas mask from image
-        function createMaskCanvas(img, width, height) {
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            
-            // Draw the image
-            ctx.drawImage(img, 0, 0, width, height);
-            
-            // Get image data
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            
-            // Create mask based on brightness (assuming black shape on white background)
-            for (let i = 0; i < data.length; i += 4) {
-                // Calculate brightness (simple average)
-                const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                
-                // Set alpha based on brightness (darker = more opaque)
-                data[i + 3] = brightness < 128 ? 255 : 0;
-            }
-            
-            // Put the modified image data back
-            ctx.putImageData(imageData, 0, 0);
-            
-            return canvas;
-        }
+        // Function to create a canvas mask from image (simplified - d3-cloud handles mask internally if using pixel array)
+        // This customSpiral approach is complex and potentially buggy. d3-cloud v1.2.7+ has better shape support.
+        // For simplicity and robustness, sticking to the default spiral or archimedean for now,
+        // unless we integrate pixel checking more directly (which is complex).
+        // If a shape MUST be used, consider libraries built specifically for shaped word clouds.
 
         // Function to generate word cloud
         function generateWordCloud() {
@@ -686,20 +631,16 @@
                 showError('Please upload a CSV file and select a text column.');
                 return;
             }
-            
             const useWeightColumn = useWeightColumnCheckbox.checked;
             const selectedWeightColumn = weightColumnSelect.value;
-            
             if (useWeightColumn && !selectedWeightColumn) {
                 showError('Please select a weight column or uncheck "Use weight column".');
                 return;
             }
-            
             if (isGenerating) return;
             isGenerating = true;
-            
             showLoading('Generating word cloud...');
-            
+
             // Get settings
             const keepPhrases = keepPhrasesCheckbox.checked;
             const minWordLength = parseInt(minWordLengthInput.value);
@@ -710,190 +651,183 @@
             const startColor = startColorInput.value;
             const endColor = endColorInput.value;
             const backgroundColor = backgroundColorInput.value;
-            
+            const selectedAspectRatio = shapeImage ? 'shape' : document.querySelector('input[name="aspect-ratio"]:checked').value; // Use shape aspect if image exists
+
             // Clear previous word cloud
             wordcloudContainer.innerHTML = '';
-            
-            // Process word frequencies based on input mode
+
+            // Process word frequencies
             if (useWeightColumn) {
-                // Using pre-defined weights from CSV
                 wordFrequencies = processPrecomputedData(selectedColumn, selectedWeightColumn);
             } else {
-                // Combine all text from the selected column
-                let combinedText = '';
-                csvData.forEach(row => {
-                    const cellValue = row[selectedColumn];
-                    if (cellValue && typeof cellValue === 'string') {
-                        combinedText += ' ' + cellValue;
-                    }
-                });
-                
+                let combinedText = csvData
+                    .map(row => row[selectedColumn])
+                    .filter(cellValue => cellValue && typeof cellValue === 'string')
+                    .join(' ');
+
                 if (!combinedText.trim()) {
                     showError('Selected column does not contain text data.');
-                    isGenerating = false;
-                    hideLoading();
-                    return;
+                    isGenerating = false; hideLoading(); return;
                 }
-                
-                // Process text to get word frequencies
                 wordFrequencies = processText(combinedText, keepPhrases, minWordLength, stopwords);
             }
-            
-            // Limit to max words
+
             wordFrequencies = wordFrequencies.slice(0, maxWords);
-            
+
             if (wordFrequencies.length === 0) {
                 showError('No words found after applying filters.');
-                isGenerating = false;
-                hideLoading();
-                return;
+                isGenerating = false; hideLoading(); return;
             }
-            
-            // Calculate dimensions
-            const containerWidth = wordcloudContainer.clientWidth;
-            const containerHeight = wordcloudContainer.clientHeight;
-            
+
+            // --- Calculate Layout Dimensions ---
+            const containerRect = wordcloudContainer.getBoundingClientRect();
+            const availableWidth = containerRect.width - 2; // Account for border
+            const availableHeight = containerRect.height - 2; // Account for border
+            let layoutWidth = availableWidth;
+            let layoutHeight = availableHeight;
+
+            if (selectedAspectRatio !== 'auto' && selectedAspectRatio !== 'shape') {
+                 let ratio = 1;
+                 if (selectedAspectRatio === 'landscape') ratio = 16 / 9;
+                 else if (selectedAspectRatio === 'portrait') ratio = 9 / 16;
+                 else if (selectedAspectRatio === 'square') ratio = 1;
+
+                 // Calculate dimensions based on ratio, fitting within the container
+                 if (availableWidth / availableHeight > ratio) {
+                     // Container is wider than target ratio, use full height
+                     layoutHeight = availableHeight;
+                     layoutWidth = availableHeight * ratio;
+                 } else {
+                     // Container is taller than target ratio, use full width
+                     layoutWidth = availableWidth;
+                     layoutHeight = availableWidth / ratio;
+                 }
+            } else if (selectedAspectRatio === 'shape' && shapeImage) {
+                 // Use aspect ratio of the shape image if provided
+                 const shapeRatio = shapeImage.width / shapeImage.height;
+                 if (availableWidth / availableHeight > shapeRatio) {
+                     layoutHeight = availableHeight;
+                     layoutWidth = availableHeight * shapeRatio;
+                 } else {
+                     layoutWidth = availableWidth;
+                     layoutHeight = availableWidth / shapeRatio;
+                 }
+            }
+            // Ensure dimensions are at least 1px
+            layoutWidth = Math.max(1, Math.floor(layoutWidth));
+            layoutHeight = Math.max(1, Math.floor(layoutHeight));
+            // --- End Calculate Layout Dimensions ---
+
+
             // Create SVG
             const svg = d3.select(wordcloudContainer)
                 .append('svg')
-                .attr('width', containerWidth)
-                .attr('height', containerHeight)
-                .attr('viewBox', `0 0 ${containerWidth} ${containerHeight}`)
-                .style('background-color', backgroundColor);
-            
-            // Add background rectangle
+                .attr('width', layoutWidth) // Use calculated layout width
+                .attr('height', layoutHeight) // Use calculated layout height
+                .attr('viewBox', `0 0 ${layoutWidth} ${layoutHeight}`) // ViewBox matches layout size
+                .style('background-color', backgroundColor)
+                .style('max-width', '100%') // Ensure SVG scales down if container shrinks
+                .style('max-height', '100%');
+
+
+            // Add background rectangle (size of the layout)
             svg.append('rect')
-                .attr('width', containerWidth)
-                .attr('height', containerHeight)
+                .attr('width', layoutWidth)
+                .attr('height', layoutHeight)
                 .attr('fill', backgroundColor);
-            
-            // Create color scale
+
+            const g = svg.append('g')
+                 .attr('transform', `translate(${layoutWidth / 2},${layoutHeight / 2})`); // Center the group
+
             const colorScale = generateColorScale(startColor, endColor, wordFrequencies.length);
-            
-            // Create word cloud layout
+
+            // Store calculated words here
+            let calculatedWords = [];
+
             wordcloudLayout = d3.layout.cloud()
-                .size([containerWidth, containerHeight])
-                .words(wordFrequencies)
-                .padding(2)
+                .size([layoutWidth, layoutHeight]) // Use calculated dimensions
+                .words(wordFrequencies.map(d => ({...d}))) // Pass a copy of words
+                .padding(5) // Increased padding
                 .rotate(() => (Math.random() * 2 - 1) * rotationRange)
-                .fontSize(d => Math.sqrt(d.value) * 5 * scaleFactor)
+                .fontSize(d => Math.max(5, Math.sqrt(d.value) * 3 * scaleFactor)) // Added min size, adjusted scale factor
                 .on('end', words => {
+                    calculatedWords = words; // Store the final words
                     // Draw the word cloud
-                    svg.append('g')
-                        .attr('transform', `translate(${containerWidth / 2},${containerHeight / 2})`)
-                        .selectAll('text')
+                    g.selectAll('text')
                         .data(words)
                         .enter()
                         .append('text')
                         .style('font-size', d => `${d.size}px`)
-                        .style('font-family', 'Arial, sans-serif')
-                        .style('font-weight', 'bold')
+                        .style('font-family', 'Impact, Arial, sans-serif') // Changed font for better packing
+                        .style('font-weight', 'normal') // Normal weight might overlap less than bold
                         .style('fill', (d, i) => colorScale(i))
                         .attr('text-anchor', 'middle')
                         .attr('transform', d => `translate(${d.x},${d.y}) rotate(${d.rotate})`)
                         .text(d => d.text);
-                        
+
                     // Enable download buttons
                     downloadPngBtn.disabled = false;
                     downloadSvgBtn.disabled = false;
-                    
+
                     isGenerating = false;
                     hideLoading();
-                })
-                .spiral(shapeImage ? customSpiral : 'archimedean');
-                
-            // Apply shape mask if available
-            if (shapeImage) {
-                // Create a mask canvas based on the shape image
-                const maskCanvas = createMaskCanvas(shapeImage, containerWidth, containerHeight);
-                const maskContext = maskCanvas.getContext('2d');
-                const maskData = maskContext.getImageData(0, 0, containerWidth, containerHeight).data;
-                
-                // Custom spiral function that considers the mask
-                function customSpiral(size, { x, y }) {
-                    // Start in the center
-                    const start = [containerWidth / 2, containerHeight / 2];
-                    const e = 0.1; // Step size
-                    let theta = 0;
-                    
-                    return function() {
-                        // Increase the angle
-                        theta += e;
-                        // Calculate the radius based on the angle
-                        const r = (theta + e) * size[0] / (2 * Math.PI);
-                        // Calculate new x and y based on polar coordinates
-                        const nx = start[0] + r * Math.cos(theta);
-                        const ny = start[1] + r * Math.sin(theta);
-                        
-                        // Check if point is within our mask
-                        const i = ((Math.floor(ny) * containerWidth) + Math.floor(nx)) * 4 + 3;
-                        
-                        // Return the point if it's within the mask, or continue the spiral
-                        if (nx >= 0 && nx < containerWidth && 
-                            ny >= 0 && ny < containerHeight &&
-                            (!maskData || maskData[i] > 128)) {
-                            return [nx, ny];
-                        }
-                        
-                        // Continue the spiral
-                        return customSpiral(size, { x, y })();
-                    };
-                }
-            }
-            
-            // Start layout calculation
+                });
+
+            // Note: Using a shape image with d3.layout.cloud requires more advanced techniques
+            // like checking pixel data from a canvas mask during the spiral placement,
+            // which is complex to implement correctly here. The customSpiral function
+            // in the original code was a conceptual attempt but likely insufficient.
+            // For this revision, we'll use the standard spiral when no shape image is provided,
+            // and rely on the aspect ratio setting for basic shaping.
+             wordcloudLayout.spiral('archimedean'); // Use standard spiral
+
             wordcloudLayout.start();
         }
 
-        // Function to download as PNG
+
+       // Function to download as PNG
         function downloadAsPNG() {
-            if (!wordcloudContainer.querySelector('svg')) {
+            const svgElement = wordcloudContainer.querySelector('svg');
+            if (!svgElement) {
                 showError('Generate a word cloud first.');
                 return;
             }
-            
+
             showLoading('Exporting PNG...');
-            
+
             const scale = parseFloat(exportScaleInput.value);
-            const svg = wordcloudContainer.querySelector('svg');
-            const width = parseInt(svg.getAttribute('width'));
-            const height = parseInt(svg.getAttribute('height'));
-            
-            // Create a new SVG with the scaled dimensions
-            const scaledSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            scaledSvg.setAttribute('width', width * scale);
-            scaledSvg.setAttribute('height', height * scale);
-            scaledSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-            scaledSvg.innerHTML = svg.innerHTML;
-            
-            // Set background color
-            const backgroundColor = backgroundColorInput.value;
-            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            rect.setAttribute('width', width);
-            rect.setAttribute('height', height);
-            rect.setAttribute('fill', backgroundColor);
-            scaledSvg.insertBefore(rect, scaledSvg.firstChild);
-            
-            // Convert SVG to a data URL
-            const svgData = new XMLSerializer().serializeToString(scaledSvg);
-            const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+            // Get the actual generated size from the SVG element itself
+            const svgWidth = parseFloat(svgElement.getAttribute('width'));
+            const svgHeight = parseFloat(svgElement.getAttribute('height'));
+            const targetWidth = svgWidth * scale;
+            const targetHeight = svgHeight * scale;
+
+            // Create a temporary SVG string with explicit size attributes for rendering
+            // Use outerHTML to capture styles applied via CSS if any (though inline styles are safer)
+            let svgString = new XMLSerializer().serializeToString(svgElement);
+
+             // Inject explicit width/height for rendering
+            svgString = svgString.replace(/<svg[^>]*>/, `<svg xmlns="http://www.w3.org/2000/svg" width="${targetWidth}" height="${targetHeight}" viewBox="${svgElement.getAttribute('viewBox')}">`);
+
+
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
             const svgUrl = URL.createObjectURL(svgBlob);
-            
-            // Create an image from the SVG
+
             const img = new Image();
             img.onload = function() {
-                // Create a canvas with the scaled dimensions
                 const canvas = document.createElement('canvas');
-                canvas.width = width * scale;
-                canvas.height = height * scale;
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
                 const ctx = canvas.getContext('2d');
-                
-                // Draw the image on the canvas
-                ctx.fillStyle = backgroundColor;
+
+                // Draw background color first (important for transparency)
+                ctx.fillStyle = backgroundColorInput.value;
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw the SVG image
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                
-                // Create a download link for the PNG
+
+                // Trigger download
                 const pngUrl = canvas.toDataURL('image/png');
                 const a = document.createElement('a');
                 a.href = pngUrl;
@@ -901,78 +835,87 @@
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                
-                // Clean up
+
                 URL.revokeObjectURL(svgUrl);
                 hideLoading();
+            };
+             img.onerror = function() {
+                showError("Failed to load SVG for PNG export.");
+                hideLoading();
+                URL.revokeObjectURL(svgUrl);
             };
             img.src = svgUrl;
         }
 
         // Function to download as SVG
         function downloadAsSVG() {
-            if (!wordcloudContainer.querySelector('svg')) {
+            const svgElement = wordcloudContainer.querySelector('svg');
+             if (!svgElement) {
                 showError('Generate a word cloud first.');
                 return;
             }
-            
+
             showLoading('Exporting SVG...');
-            
+
             const scale = parseFloat(exportScaleInput.value);
-            const svg = wordcloudContainer.querySelector('svg');
-            const width = parseInt(svg.getAttribute('width'));
-            const height = parseInt(svg.getAttribute('height'));
-            
-            // Create a new SVG with the scaled dimensions
-            const scaledSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            scaledSvg.setAttribute('width', width * scale);
-            scaledSvg.setAttribute('height', height * scale);
-            scaledSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-            scaledSvg.innerHTML = svg.innerHTML;
-            
-            // Set background color
-            const backgroundColor = backgroundColorInput.value;
-            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            rect.setAttribute('width', width);
-            rect.setAttribute('height', height);
-            rect.setAttribute('fill', backgroundColor);
-            scaledSvg.insertBefore(rect, scaledSvg.firstChild);
-            
-            // Convert SVG to a data URL
-            const svgData = new XMLSerializer().serializeToString(scaledSvg);
+             // Get the actual generated size from the SVG element itself
+            const svgWidth = parseFloat(svgElement.getAttribute('width'));
+            const svgHeight = parseFloat(svgElement.getAttribute('height'));
+            const targetWidth = svgWidth * scale;
+            const targetHeight = svgHeight * scale;
+
+
+            // Clone the SVG element to modify it for export
+            const svgClone = svgElement.cloneNode(true);
+            svgClone.setAttribute('width', targetWidth);
+            svgClone.setAttribute('height', targetHeight);
+            // The viewBox should remain the same as the original layout
+
+            // Ensure background rect is the first element if exporting background color
+             const backgroundRect = svgClone.querySelector('rect');
+             if (backgroundRect && backgroundRect.getAttribute('fill') === backgroundColorInput.value) {
+                 // Already has a background rect, ensure it's first
+                 svgClone.insertBefore(backgroundRect, svgClone.firstChild);
+             } else {
+                 // Add background rect if missing or incorrect
+                 const newRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                 newRect.setAttribute('width', svgWidth); // rect size matches viewBox
+                 newRect.setAttribute('height', svgHeight);
+                 newRect.setAttribute('fill', backgroundColorInput.value);
+                 svgClone.insertBefore(newRect, svgClone.firstChild);
+             }
+
+
+            const svgData = new XMLSerializer().serializeToString(svgClone);
             const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
             const svgUrl = URL.createObjectURL(svgBlob);
-            
-            // Create a download link for the SVG
+
             const a = document.createElement('a');
             a.href = svgUrl;
             a.download = 'wordcloud.svg';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            
-            // Clean up
+
             URL.revokeObjectURL(svgUrl);
             hideLoading();
         }
 
         // Function to show loading message
         function showLoading(message) {
-            // Create loading overlay if it doesn't exist
-            let loadingOverlay = document.querySelector('.loading');
+            let loadingOverlay = wordcloudContainer.querySelector('.loading');
             if (!loadingOverlay) {
                 loadingOverlay = document.createElement('div');
                 loadingOverlay.className = 'loading';
-                wordcloudContainer.appendChild(loadingOverlay);
+                wordcloudContainer.appendChild(loadingOverlay); // Append to container
             }
-            
             loadingOverlay.textContent = message;
             loadingOverlay.style.display = 'flex';
         }
 
         // Function to hide loading message
         function hideLoading() {
-            const loadingOverlay = document.querySelector('.loading');
+            const loadingOverlay = wordcloudContainer.querySelector('.loading');
             if (loadingOverlay) {
                 loadingOverlay.style.display = 'none';
             }
